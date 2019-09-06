@@ -239,3 +239,157 @@ class EfficientNet(nn.Module):
         valid_models = ['efficientnet_b'+str(i) for i in range(num_models)]
         if model_name.replace('-','_') not in valid_models:
             raise ValueError('model_name should be one of: ' + ', '.join(valid_models))
+            
+            
+cache_layer_idx = {
+    'efficientnet-b0': [0,2,4,10],
+    'efficientnet-b1': [1,4,7,15],
+    'efficientnet-b2': [1,4,7,15],
+    'efficientnet-b3': [1,4,7,17],
+    'efficientnet-b4': [1,5,9,21],
+    'efficientnet-b5': [2,7,12,26],
+    'efficientnet-b6': [2,8,14,30],
+    'efficientnet-b7': [3,10,17,37],
+}
+
+
+def upscale(x):
+    x = F.interpolate(x, scale_factor=2, mode='nearest')
+    return x
+
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+    
+class DecodeBlock(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(DecodeBlock, self).__init__()
+        self.multiplier = 2
+
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel*self.multiplier, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_channel*self.multiplier),
+            Swish(),
+            #nn.Dropout(0.1),
+
+            nn.Conv2d(out_channel*self.multiplier, out_channel*self.multiplier, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_channel*self.multiplier),
+            Swish(),
+            #nn.Dropout(0.1),
+
+            nn.Conv2d(out_channel*self.multiplier, out_channel, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_channel),
+            Swish(),
+        )
+
+    def forward(self, x): 
+        return self.block(torch.cat(x, 1))
+
+class EfficientUNet(nn.Module):
+
+    def __init__(self, model_name, blocks_args=None, global_params=None):
+        super().__init__()
+        assert isinstance(blocks_args, list), 'blocks_args should be a list'
+        assert len(blocks_args) > 0, 'block args must be greater than 0'
+        self.model_name = model_name
+        self._global_params = global_params
+        self._blocks_args = blocks_args
+
+        # Get static or dynamic convolution depending on image size
+        Conv2d = get_same_padding_conv2d(image_size=global_params.image_size)
+
+        # Batch norm parameters
+        bn_mom = 1 - self._global_params.batch_norm_momentum
+        bn_eps = self._global_params.batch_norm_epsilon
+
+        # Stem
+        in_channels = 3  # rgb
+        out_channels = round_filters(32, self._global_params)  # number of output channels
+        self._conv_stem = Conv2d(in_channels, out_channels, kernel_size=3, stride=2, bias=False)
+        self._bn0 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+
+        # Build blocks
+        self._blocks = nn.ModuleList([])
+        for block_args in self._blocks_args:
+
+            # Update block input and output filters based on depth multiplier.
+            block_args = block_args._replace(
+                input_filters=round_filters(block_args.input_filters, self._global_params),
+                output_filters=round_filters(block_args.output_filters, self._global_params),
+                num_repeat=round_repeats(block_args.num_repeat, self._global_params)
+            )
+
+            # The first block needs to take care of stride and filter size increase.
+            self._blocks.append(MBConvBlock(block_args, self._global_params))
+            if block_args.num_repeat > 1:
+                block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+            for _ in range(block_args.num_repeat - 1):
+                self._blocks.append(MBConvBlock(block_args, self._global_params))
+        
+        self.decode4 = DecodeBlock(self._blocks[-1]._bn2.num_features, self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features)
+        self.decode3 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features)
+        self.decode2 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features)
+        self.decode1 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features)
+        self.decode0 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features * 2, 4)
+        
+        # Head
+        in_channels = block_args.output_filters  # output of final block
+        out_channels = round_filters(1280, self._global_params)
+        self._conv_head = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self._bn1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+
+        # Final linear layer
+        self._dropout = self._global_params.dropout_rate
+        self._fc = nn.Linear(out_channels, self._global_params.num_classes)
+
+    def forward(self, inputs):
+        """ Calls extract_features to extract features, applies final linear layer, and returns logits. """
+
+        # Stem
+        x = relu_fn(self._bn0(self._conv_stem(inputs)))
+
+        # Blocks
+        cache = []
+        for idx, block in enumerate(self._blocks):
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x = block(x, drop_connect_rate=drop_connect_rate)
+            if idx in cache_layer_idx[self.model_name]:
+                cache.append(x)
+
+        x = self.decode4([x])
+        x = self.decode3([upscale(x), cache[-1]])
+        x = self.decode2([upscale(x), cache[-2]])
+        x = self.decode1([upscale(x), cache[-3]])
+        x = self.decode0([upscale(x), cache[-4]])
+        return x
+
+    @classmethod
+    def from_name(cls, model_name, override_params=None):
+        cls._check_model_name_is_valid(model_name)
+        blocks_args, global_params = get_model_params(model_name, override_params)
+        return cls(model_name, blocks_args, global_params)
+
+    @classmethod
+    def from_pretrained(cls, model_name, num_classes=1000):
+        model = cls.from_name(model_name, override_params={'num_classes': num_classes})
+        load_pretrained_weights(model, model_name, load_fc=(num_classes == 1000))
+        return model
+
+    @classmethod
+    def get_image_size(cls, model_name):
+        cls._check_model_name_is_valid(model_name)
+        _, _, res, _ = efficientnet_params(model_name)
+        return res
+
+    @classmethod
+    def _check_model_name_is_valid(cls, model_name, also_need_pretrained_weights=False):
+        """ Validates model name. None that pretrained weights are only available for
+        the first four models (efficientnet-b{i} for i in 0,1,2,3) at the moment. """
+        num_models = 4 if also_need_pretrained_weights else 8
+        valid_models = ['efficientnet-b'+str(i) for i in range(num_models)]
+        if model_name not in valid_models:
+            raise ValueError('model_name should be one of: ' + ', '.join(valid_models))
