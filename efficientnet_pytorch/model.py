@@ -328,21 +328,15 @@ class EfficientUNet(nn.Module):
             for _ in range(block_args.num_repeat - 1):
                 self._blocks.append(MBConvBlock(block_args, self._global_params))
         
-        self.decode4 = DecodeBlock(self._blocks[-1]._bn2.num_features, self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features)
-        self.decode3 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features)
-        self.decode2 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features)
-        self.decode1 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features)
-        self.decode0 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features * 2, 4)
-        
-        # Head
-        in_channels = block_args.output_filters  # output of final block
-        out_channels = round_filters(1280, self._global_params)
-        self._conv_head = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self._bn1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+        self.decode5 = DecodeBlock(self._blocks[-1]._bn2.num_features, self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features)
+        self.decode4 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-1]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features)
+        self.decode3 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-2]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features)
+        self.decode2 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-3]]._bn2.num_features * 2, self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features)
+        self.decode1 = DecodeBlock(self._blocks[cache_layer_idx[self.model_name][-4]]._bn2.num_features * 2, 32)
+        self.decode0 = DecodeBlock(32, 32)
 
-        # Final linear layer
-        self._dropout = self._global_params.dropout_rate
-        self._fc = nn.Linear(out_channels, self._global_params.num_classes)
+        self.final = Conv2d(32, 4, kernel_size=1, bias=False)
+        
 
     def forward(self, inputs):
         """ Calls extract_features to extract features, applies final linear layer, and returns logits. """
@@ -360,11 +354,13 @@ class EfficientUNet(nn.Module):
             if idx in cache_layer_idx[self.model_name]:
                 cache.append(x)
 
-        x = self.decode4([x])
-        x = self.decode3([upscale(x), cache[-1]])
-        x = self.decode2([upscale(x), cache[-2]])
-        x = self.decode1([upscale(x), cache[-3]])
-        x = self.decode0([upscale(x), cache[-4]])
+        x = self.decode5([x])
+        x = self.decode4([upscale(x), cache[-1]])
+        x = self.decode3([upscale(x), cache[-2]])
+        x = self.decode2([upscale(x), cache[-3]])
+        x = self.decode1([upscale(x), cache[-4]])
+        x = self.decode0([upscale(x)])
+        x = self.final(x)
         return x
 
     @classmethod
