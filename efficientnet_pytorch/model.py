@@ -318,7 +318,7 @@ class EfficientNetEncoder(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x = block(x, drop_connect_rate=drop_connect_rate)
             if idx in cache_layer_idx[self.model_name]:
-                cache.append(x)
+                global_features.append(x)
         x = relu_fn(self.model._bn1(self.model._conv_head(x)))
         global_features.append(x)
         global_features.reverse()
