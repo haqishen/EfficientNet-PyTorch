@@ -379,7 +379,7 @@ class EfficientNetEncoder_SMP(EfficientNet):
         blocks_args, global_params = get_model_params(model_name, override_params=None)
         super().__init__(blocks_args, global_params, )
         if pretrained:
-            load_pretrained_weights(self, model_name, load_fc=(num_classes == 1000))
+            load_pretrained_weights(self, model_name, load_fc=False)
 
         self._skip_connections = list(efficient_net_encoders[model_name]['params']['skip_connections'])
         self._skip_connections.append(len(self._blocks))
