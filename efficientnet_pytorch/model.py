@@ -252,15 +252,24 @@ cache_layer_idx = {
     'efficientnet-b7': [3,10,17,37],
 }
 
+efficientnet_encoder_channels = {
+    'efficientnet-b0': (1280, 112, 40, 24, 16),
+    'efficientnet-b1': (1280, 112, 40, 24, 16),
+    'efficientnet-b2': (1408, 120, 48, 24, 16),
+    'efficientnet-b3': (1536, 136, 48, 32, 24),
+    'efficientnet-b4': (1792, 160, 56, 32, 24),
+    'efficientnet-b5': (2048, 176, 64, 40, 24),
+    'efficientnet-b7': (2560, 224, 80, 48, 32),
+}
 
 def upscale(x):
     x = F.interpolate(x, scale_factor=2, mode='nearest')
     return x
 
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
+# class Swish(nn.Module):
+#     def forward(self, x):
+#         return x * torch.sigmoid(x)
 
 
 class EfficientNetEncoder(nn.Module):
@@ -325,7 +334,10 @@ class EfficientNetEncoder(nn.Module):
             x = block(x, drop_connect_rate=drop_connect_rate)
             if idx in cache_layer_idx[self.model_name]:
                 global_features.append(x)
+
+        # Head
         x = relu_fn(self._bn1(self._conv_head(x)))
+
         global_features.append(x)
         global_features.reverse()
 
@@ -357,3 +369,131 @@ class EfficientNetEncoder(nn.Module):
         valid_models = ['efficientnet-b'+str(i) for i in range(num_models)]
         if model_name not in valid_models:
             raise ValueError('model_name should be one of: ' + ', '.join(valid_models))
+
+
+
+###
+
+efficient_net_encoders = {
+    'efficientnet-b0': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (320, 112, 40, 24, 32),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b0'),
+        'params': {
+            'skip_connections': [3, 5, 9],
+            'model_name': 'efficientnet-b0'
+        }
+    },
+    'efficientnet-b1': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (320, 112, 40, 24, 32),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b1'),
+        'params': {
+            'skip_connections': [5, 8, 16],
+            'model_name': 'efficientnet-b1'
+        }
+    },
+    'efficientnet-b2': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (352, 120, 48, 24, 32),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b2'),
+        'params': {
+            'skip_connections': [5, 8, 16],
+            'model_name': 'efficientnet-b2'
+        }
+    },
+    'efficientnet-b3': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (384, 136, 48, 32, 40),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b3'),
+        'params': {
+            'skip_connections': [5, 8, 18],
+            'model_name': 'efficientnet-b3'
+        }
+    },
+    'efficientnet-b4': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (448, 160, 56, 32, 48),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b4'),
+        'params': {
+            'skip_connections': [6, 10, 22],
+            'model_name': 'efficientnet-b4'
+        }
+    },
+    'efficientnet-b5': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (512, 176, 64, 40, 48),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b5'),
+        'params': {
+            'skip_connections': [8, 13, 27],
+            'model_name': 'efficientnet-b5'
+        }
+    },
+    'efficientnet-b6': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (576, 200, 72, 40, 56),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b6'),
+        'params': {
+            'skip_connections': [9, 15, 31],
+            'model_name': 'efficientnet-b6'
+        }
+    },
+    'efficientnet-b7': {
+        'encoder': EfficientNetEncoder_SMP,
+        'out_shapes': (640, 224, 80, 48, 64),
+        'pretrained_settings': _get_pretrained_settings('efficientnet-b7'),
+        'params': {
+            'skip_connections': [11, 18, 38],
+            'model_name': 'efficientnet-b7'
+        }
+    }
+}
+
+
+class EfficientNetEncoder_SMP(EfficientNet):
+    def __init__(self, model_name, pretrained=True):
+        blocks_args, global_params = get_model_params(model_name, override_params=None)
+        super().__init__(blocks_args, global_params, )
+        if pretrained:
+            load_pretrained_weights(self, model_name, load_fc=(num_classes == 1000))
+
+        self._skip_connections = list(efficient_net_encoders[model_name]['params']['skip_connections'])
+        self._skip_connections.append(len(self._blocks))
+        
+        del self._fc
+        
+    def forward(self, x):
+        result = []
+        x = relu_fn(self._bn0(self._conv_stem(x)))
+        result.append(x)
+
+        skip_connection_idx = 0
+        for idx, block in enumerate(self._blocks):
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x = block(x, drop_connect_rate=drop_connect_rate)
+            if idx == self._skip_connections[skip_connection_idx] - 1:
+                skip_connection_idx += 1
+                result.append(x)
+
+        return list(reversed(result))
+
+    def load_state_dict(self, state_dict, **kwargs):
+        state_dict.pop('_fc.bias')
+        state_dict.pop('_fc.weight')
+        super().load_state_dict(state_dict, **kwargs)
+
+
+
+def _get_pretrained_settings(encoder):
+    pretrained_settings = {
+        'imagenet': {
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'url': url_map[encoder],
+            'input_space': 'RGB',
+            'input_range': [0, 1]
+        }
+    }
+    return pretrained_settings
