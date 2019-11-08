@@ -374,6 +374,55 @@ class EfficientNetEncoder(nn.Module):
 
 ###
 
+class EfficientNetEncoder_SMP(EfficientNet):
+    def __init__(self, model_name, pretrained=True):
+        blocks_args, global_params = get_model_params(model_name, override_params=None)
+        super().__init__(blocks_args, global_params, )
+        if pretrained:
+            load_pretrained_weights(self, model_name, load_fc=(num_classes == 1000))
+
+        self._skip_connections = list(efficient_net_encoders[model_name]['params']['skip_connections'])
+        self._skip_connections.append(len(self._blocks))
+        
+        del self._fc
+        
+    def forward(self, x):
+        result = []
+        x = relu_fn(self._bn0(self._conv_stem(x)))
+        result.append(x)
+
+        skip_connection_idx = 0
+        for idx, block in enumerate(self._blocks):
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x = block(x, drop_connect_rate=drop_connect_rate)
+            if idx == self._skip_connections[skip_connection_idx] - 1:
+                skip_connection_idx += 1
+                result.append(x)
+
+        return list(reversed(result))
+
+    def load_state_dict(self, state_dict, **kwargs):
+        state_dict.pop('_fc.bias')
+        state_dict.pop('_fc.weight')
+        super().load_state_dict(state_dict, **kwargs)
+
+
+
+def _get_pretrained_settings(encoder):
+    pretrained_settings = {
+        'imagenet': {
+            'mean': [0.485, 0.456, 0.406],
+            'std': [0.229, 0.224, 0.225],
+            'url': url_map[encoder],
+            'input_space': 'RGB',
+            'input_range': [0, 1]
+        }
+    }
+    return pretrained_settings
+
+
 efficient_net_encoders = {
     'efficientnet-b0': {
         'encoder': EfficientNetEncoder_SMP,
@@ -449,51 +498,3 @@ efficient_net_encoders = {
     }
 }
 
-
-class EfficientNetEncoder_SMP(EfficientNet):
-    def __init__(self, model_name, pretrained=True):
-        blocks_args, global_params = get_model_params(model_name, override_params=None)
-        super().__init__(blocks_args, global_params, )
-        if pretrained:
-            load_pretrained_weights(self, model_name, load_fc=(num_classes == 1000))
-
-        self._skip_connections = list(efficient_net_encoders[model_name]['params']['skip_connections'])
-        self._skip_connections.append(len(self._blocks))
-        
-        del self._fc
-        
-    def forward(self, x):
-        result = []
-        x = relu_fn(self._bn0(self._conv_stem(x)))
-        result.append(x)
-
-        skip_connection_idx = 0
-        for idx, block in enumerate(self._blocks):
-            drop_connect_rate = self._global_params.drop_connect_rate
-            if drop_connect_rate:
-                drop_connect_rate *= float(idx) / len(self._blocks)
-            x = block(x, drop_connect_rate=drop_connect_rate)
-            if idx == self._skip_connections[skip_connection_idx] - 1:
-                skip_connection_idx += 1
-                result.append(x)
-
-        return list(reversed(result))
-
-    def load_state_dict(self, state_dict, **kwargs):
-        state_dict.pop('_fc.bias')
-        state_dict.pop('_fc.weight')
-        super().load_state_dict(state_dict, **kwargs)
-
-
-
-def _get_pretrained_settings(encoder):
-    pretrained_settings = {
-        'imagenet': {
-            'mean': [0.485, 0.456, 0.406],
-            'std': [0.229, 0.224, 0.225],
-            'url': url_map[encoder],
-            'input_space': 'RGB',
-            'input_range': [0, 1]
-        }
-    }
-    return pretrained_settings
