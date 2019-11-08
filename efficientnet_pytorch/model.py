@@ -404,8 +404,11 @@ class EfficientNetEncoder_SMP(EfficientNet):
         return list(reversed(result))
 
     def load_state_dict(self, state_dict, **kwargs):
-        state_dict.pop('_fc.bias')
-        state_dict.pop('_fc.weight')
+        try:
+            state_dict.pop('_fc.bias')
+            state_dict.pop('_fc.weight')
+        except:
+            pass
         super().load_state_dict(state_dict, **kwargs)
 
 

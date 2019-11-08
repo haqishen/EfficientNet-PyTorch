@@ -319,11 +319,8 @@ def load_pretrained_weights(model, model_name, load_fc=True):
     if load_fc:
         model.load_state_dict(state_dict, strict=False)
     else:
-        try:
-            state_dict.pop('_fc.weight')
-            state_dict.pop('_fc.bias')
-        except:
-            pass
+        state_dict.pop('_fc.weight')
+        state_dict.pop('_fc.bias')
         res = model.load_state_dict(state_dict, strict=False)
 #         assert str(res.missing_keys) == str(['_fc.weight', '_fc.bias']), 'issue loading pretrained weights'
     print('Loaded pretrained weights for {}'.format(model_name))
