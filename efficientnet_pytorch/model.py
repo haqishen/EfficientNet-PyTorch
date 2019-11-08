@@ -427,7 +427,6 @@ efficient_net_encoders = {
     'efficientnet-b0': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (320, 112, 40, 24, 32),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b0'),
         'params': {
             'skip_connections': [3, 5, 9],
             'model_name': 'efficientnet-b0'
@@ -436,7 +435,6 @@ efficient_net_encoders = {
     'efficientnet-b1': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (320, 112, 40, 24, 32),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b1'),
         'params': {
             'skip_connections': [5, 8, 16],
             'model_name': 'efficientnet-b1'
@@ -445,7 +443,6 @@ efficient_net_encoders = {
     'efficientnet-b2': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (352, 120, 48, 24, 32),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b2'),
         'params': {
             'skip_connections': [5, 8, 16],
             'model_name': 'efficientnet-b2'
@@ -454,7 +451,6 @@ efficient_net_encoders = {
     'efficientnet-b3': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (384, 136, 48, 32, 40),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b3'),
         'params': {
             'skip_connections': [5, 8, 18],
             'model_name': 'efficientnet-b3'
@@ -463,7 +459,6 @@ efficient_net_encoders = {
     'efficientnet-b4': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (448, 160, 56, 32, 48),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b4'),
         'params': {
             'skip_connections': [6, 10, 22],
             'model_name': 'efficientnet-b4'
@@ -472,7 +467,6 @@ efficient_net_encoders = {
     'efficientnet-b5': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (512, 176, 64, 40, 48),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b5'),
         'params': {
             'skip_connections': [8, 13, 27],
             'model_name': 'efficientnet-b5'
@@ -481,7 +475,6 @@ efficient_net_encoders = {
     'efficientnet-b6': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (576, 200, 72, 40, 56),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b6'),
         'params': {
             'skip_connections': [9, 15, 31],
             'model_name': 'efficientnet-b6'
@@ -490,7 +483,6 @@ efficient_net_encoders = {
     'efficientnet-b7': {
         'encoder': EfficientNetEncoder_SMP,
         'out_shapes': (640, 224, 80, 48, 64),
-        'pretrained_settings': _get_pretrained_settings('efficientnet-b7'),
         'params': {
             'skip_connections': [11, 18, 38],
             'model_name': 'efficientnet-b7'
