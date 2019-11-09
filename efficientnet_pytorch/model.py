@@ -259,6 +259,7 @@ efficientnet_encoder_channels = {
     'efficientnet-b3': (1536, 136, 48, 32, 24),
     'efficientnet-b4': (1792, 160, 56, 32, 24),
     'efficientnet-b5': (2048, 176, 64, 40, 24),
+    'efficientnet-b6': (2304, 200, 72, 40, 32),
     'efficientnet-b7': (2560, 224, 80, 48, 32),
 }
 
