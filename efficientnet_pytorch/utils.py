@@ -179,6 +179,8 @@ def efficientnet_params(model_name):
         'efficientnet-b5': (1.6, 2.2, 456, 0.4),
         'efficientnet-b6': (1.8, 2.6, 528, 0.5),
         'efficientnet-b7': (2.0, 3.1, 600, 0.5),
+        'efficientnet-b8': (2.2, 3.6, 672, 0.5),
+        'efficientnet-l2': (4.3, 5.3, 800, 0.5),
     }
     return params_dict[model_name]
 
@@ -311,6 +313,7 @@ url_map = {
     'efficientnet-b5': 'http://storage.googleapis.com/public-models/efficientnet/efficientnet-b5-b6417697.pth',
     'efficientnet-b6': 'http://storage.googleapis.com/public-models/efficientnet/efficientnet-b6-c76e70fd.pth',
     'efficientnet-b7': 'http://storage.googleapis.com/public-models/efficientnet/efficientnet-b7-dcc49843.pth',
+    'efficientnet-b8': 'https://publicmodels.blob.core.windows.net/container/advprop/efficientnet-b8-22a8fe65.pth',
 }
 
 def load_pretrained_weights(model, model_name, load_fc=True):
