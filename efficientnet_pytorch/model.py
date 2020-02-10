@@ -235,8 +235,7 @@ class EfficientNet(nn.Module):
     def _check_model_name_is_valid(cls, model_name, also_need_pretrained_weights=False):
         """ Validates model name. None that pretrained weights are only available for
         the first four models (efficientnet-b{i} for i in 0,1,2,3) at the moment. """
-        num_models = 4 if also_need_pretrained_weights else 8
-        valid_models = ['efficientnet_b'+str(i) for i in range(num_models)]
+        valid_models = ['efficientnet_b'+str(i) for i in range(9)]
         if model_name.replace('-','_') not in valid_models:
             raise ValueError('model_name should be one of: ' + ', '.join(valid_models))
             
